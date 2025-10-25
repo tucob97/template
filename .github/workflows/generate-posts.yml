@@ -40,7 +40,7 @@ jobs:
 
           # Verify template exists
           if not os.path.exists(TEMPLATE):
-              print("❌ ERROR: template.html not found.")
+              print("ERROR: template.html not found.")
               sys.exit(1)
 
           # Load existing posts list (if exists)
@@ -49,7 +49,7 @@ jobs:
               with open(POSTLIST, "r") as f:
                   existing_posts = [line.strip() for line in f if line.strip()]
           else:
-              print("⚠️  POSTLIST.txt not found — it will be created.")
+              print("WARNING: POSTLIST.txt not found — it will be created.")
 
           new_posts = []
           for fname in os.listdir(BASE_DIR):
@@ -60,7 +60,7 @@ jobs:
               md_path = os.path.join(BASE_DIR, fname)
               html_path = os.path.join(BASE_DIR, f"{post_name}.html")
 
-              print(f"📄 Processing: {fname}")
+              print(f"Processing: {fname}")
 
               try:
                   with open(TEMPLATE, "r") as f:
@@ -77,25 +77,25 @@ jobs:
                   with open(html_path, "w") as f:
                       f.write(html)
 
-                  print(f"✅ Generated: {html_path}")
+                  print(f"Generated: {html_path}")
 
                   if post_name not in existing_posts:
                       existing_posts.append(post_name)
                       new_posts.append(post_name)
 
               except Exception as e:
-                  print(f"❌ Failed to generate {fname}: {e}")
+                  print(f"ERROR: Failed to generate {fname}: {e}")
                   sys.exit(1)
 
           with open(POSTLIST, "w") as f:
               f.write("\n".join(sorted(existing_posts)) + "\n")
 
           print("--------------------------")
-          print(f"📚 Updated POSTLIST.txt ({len(existing_posts)} total posts)")
+          print(f"Updated POSTLIST.txt ({len(existing_posts)} total posts)")
           if new_posts:
-              print(f"🆕 New posts added: {', '.join(new_posts)}")
+              print(f"New posts added: {', '.join(new_posts)}")
           else:
-              print("ℹ️ No new posts added.")
+              print("No new posts added.")
           print("=== Generation complete ===")
           PYCODE
 
@@ -111,9 +111,9 @@ jobs:
 
           git add blogpost/*.html blogpost/POSTLIST.txt || true
           if git diff --cached --quiet; then
-            echo "✅ No changes to commit."
+            echo "No changes to commit."
           else
             git commit -m "Auto-generate new post HTML files"
             git push
-            echo "🚀 Changes pushed successfully."
+            echo "Changes pushed successfully."
           fi

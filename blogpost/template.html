@@ -1,402 +1,387 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>~ [POST_TITLE] ~</title>
+  <meta charset="utf-8">
+  <title>~ post ~</title>
+  <meta name="description" content="post blog post">
+  <link rel="canonical" href="https://yoursite.com/post.html"> 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
 
-    <meta name="description" content="[POST_DESCRIPTION - A short snippet of the post content]">
-    <link rel="canonical" href="https://yoursite.com/[POST_SLUG].html"> 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
-
-    <style>
-      body {
-        background-color: #3e3b3b;
-        color: rgb(136,185,136);
-        font-family: monospace;
-        margin: 0;
-        padding: 10px;
-      }
-      #terminal {
-        white-space: pre-wrap;
-        outline: none;
-        min-height: 100vh;
-      }
-      .prompt {
-        color: #0ff;
-      }
-      .file-name {
-        color: #fff;
-      }
-      .input-line {
-        display: inline;
-        position: relative;
-        min-width: 1ch;
-        outline: none;
-      }
-      .post-output {
-        white-space: normal;
-        margin-top: 10px;
-        margin-bottom: 20px;
-      }
-      .post-output h1 {
-        color: #f00; /* Main title remains RED */
-        text-decoration: underline;
-        margin-top: 1em;
-        margin-bottom: 0.5em;
-      }
-      .post-output h2 {
-        color: rgb(219, 118, 118); /* Subtitle is now CYAN */
-        text-decoration: underline;
-        margin-top: 0.5em; /* Slightly less space above for a better subtitle look */
-        margin-bottom: 1em;
-      }
-      .post-output pre {
-        background-color: #111;
-        border: 1px solid #333;
-        padding: 8px;
-        color: #0ff;
-        white-space: pre-wrap;
-      }
-      #shadow-hint {
-        position: absolute;
-        color: #c1c194;
-        pointer-events: none;
-        white-space: pre;
-        z-index: 1;
-      }
-    </style>
+  <style>
+    body {
+      background-color: #3e3b3b;
+      color: rgb(136,185,136);
+      font-family: monospace;
+      margin: 0;
+      padding: 10px;
+    }
+    #terminal {
+      white-space: pre-wrap;
+      outline: none;
+      min-height: 100vh;
+    }
+    .prompt {
+      color: #0ff;
+    }
+    .file-name {
+      color: #fff;
+    }
+    .input-line {
+      display: inline;
+      position: relative;
+      min-width: 1ch;
+      outline: none;
+    }
+    .post-output {
+      white-space: normal;
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+    .post-output h1 {
+      color: #f00;
+      text-decoration: underline;
+      margin-top: 1em;
+      margin-bottom: 0.5em;
+    }
+    .post-output h2 {
+      color: rgb(219, 118, 118);
+      text-decoration: underline;
+      margin-top: 0.5em;
+      margin-bottom: 1em;
+    }
+    .post-output pre {
+      background-color: #111;
+      border: 1px solid #333;
+      padding: 8px;
+      color: #0ff;
+      white-space: pre-wrap;
+    }
+    .mermaid {
+      background: #222;
+      border-radius: 8px;
+      padding: 1em;
+      margin: 1em 0;
+    }
+    #shadow-hint {
+      position: absolute;
+      color: #c1c194;
+      pointer-events: none;
+      white-space: pre;
+      z-index: 1;
+    }
+  </style>
 </head>
 <body>
-    <div id="terminal" tabindex="0">
-        </div>
-<script>
-const term = document.getElementById('terminal');
+  <div id="terminal" tabindex="0"></div>
 
-const converter = new showdown.Converter(); 
+  <script>
+  const term = document.getElementById('terminal');
+  const converter = new showdown.Converter(); 
 
-let history = [];
-let histPos = 0;
-let currentInput = ''; 
+  let history = [];
+  let histPos = 0;
+  let currentInput = ''; 
+  let postList = []; 
 
-let postList = []; 
+  const commandList = ['help', 'cat', 'exit', 'clear', 'ls', 'grep'];
 
-// MODIFIED: Added 'grep'
-const commandList = ['help', 'cat', 'exit', 'clear', 'ls', 'grep'];
+  function print(text='') {
+    term.innerHTML += text + '\n';
+  }
 
-function print(text='') {
-  term.innerHTML += text + '\n';
-}
+  async function catFile(fileName) {
+    const filePath = `${fileName}`; 
+    
+    try {
+      const response = await fetch(filePath);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const markdownText = await response.text();
+      const htmlContent = converter.makeHtml(markdownText);
+      print(`<div class="post-output">${htmlContent}</div>`);
 
-async function catFile(fileName) {
-  const filePath = `${fileName}`; 
-  
-  try {
-    const response = await fetch(filePath);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      // --- 🧠 Mermaid rendering support ---
+      setTimeout(() => {
+        if (window.mermaid) {
+          const diagrams = term.querySelectorAll('.post-output .language-mermaid, .post-output .mermaid');
+          if (diagrams.length > 0) {
+            diagrams.forEach(block => {
+              if (block.tagName.toLowerCase() === 'code') {
+                const pre = block.parentElement;
+                const code = block.textContent;
+                const div = document.createElement('div');
+                div.className = 'mermaid';
+                div.textContent = code;
+                pre.replaceWith(div);
+              }
+            });
+            window.mermaid.init(undefined, term.querySelectorAll('.post-output .mermaid'));
+          }
+        }
+      }, 50);
+      // -------------------------------------
+
+    } catch (error) {
+      print(`<span style="color: #f00;">Error: Could not load post from ${filePath}.</span>`);
+      print(`<span style="color: #f00;">**REMINDER:** You must run a local web server for this to work.</span>`);
     }
-    const markdownText = await response.text();
-    const htmlContent = converter.makeHtml(markdownText);
-    print(`<div class="post-output">${htmlContent}</div>`);
-
-  } catch (error) {
-    print(`<span style="color: #f00;">Error: Could not load post from ${filePath}.</span>`);
-    print(`<span style="color: #f00;">**REMINDER:** You must run a local web server for this to work.</span>`);
+    
+    print('\n'); 
+    prompt(); 
   }
-  
-  print('\n'); 
-  prompt(); 
-}
 
-function focusLastInput() {
-  const input = term.querySelector('.input-line:last-child');
-  if (input) {
-    input.focus();
-    term.scrollTop = term.scrollHeight;
+  function focusLastInput() {
+    const input = term.querySelector('.input-line:last-child');
+    if (input) {
+      input.focus();
+      term.scrollTop = term.scrollHeight;
+    }
   }
-}
 
-// <-- NEW: Helper function to move cursor to the end
-function moveCursorToEnd(el) {
+  function moveCursorToEnd(el) {
     if (!el) return;
     const node = el.childNodes[0] || el;
     const len = node.textContent.length;
-    
     const range = document.createRange();
     const sel = window.getSelection();
     range.setStart(node, len);
     range.collapse(true);
     sel.removeAllRanges();
     sel.addRange(range);
-}
+  }
 
-function findCompletion(input) {
+  function findCompletion(input) {
     if (!input) return null;
     const parts = input.trim().split(/\s+/);
     const command = parts[0];
     const arg = parts.length > 1 ? parts.slice(1).join(' ') : null;
 
     if (parts.length === 1 && !input.endsWith(' ')) {
-        const matches = commandList.filter(cmd => cmd.startsWith(command));
-        return matches.length === 1 ? matches[0] : null;
+      const matches = commandList.filter(cmd => cmd.startsWith(command));
+      return matches.length === 1 ? matches[0] : null;
     }
     
     if (command === 'cat' && arg) {
-        const matches = postList.filter(filename => 
-            filename.startsWith(arg)
-        );
-
-        if (matches.length === 1) {
-            return 'cat ' + matches[0];
-        } else if (matches.length > 1) {
-             let prefix = arg;
-             let finished = false;
-             while (!finished) {
-                 const currentChar = matches[0][prefix.length];
-                 if (currentChar && matches.every(match => match.startsWith(prefix + currentChar))) {
-                     prefix += currentChar;
-                 } else {
-                     finished = true;
-                 }
-             }
-             return prefix.length > arg.length ? 'cat ' + prefix : null;
+      const matches = postList.filter(filename => filename.startsWith(arg));
+      if (matches.length === 1) {
+        return 'cat ' + matches[0];
+      } else if (matches.length > 1) {
+        let prefix = arg;
+        let finished = false;
+        while (!finished) {
+          const currentChar = matches[0][prefix.length];
+          if (currentChar && matches.every(match => match.startsWith(prefix + currentChar))) {
+            prefix += currentChar;
+          } else {
+            finished = true;
+          }
         }
+        return prefix.length > arg.length ? 'cat ' + prefix : null;
+      }
     }
-    
     return null;
-}
+  }
 
-function handleTab(inputElement) {
+  function handleTab(inputElement) {
     const currentText = inputElement.textContent.trim();
     const completedText = findCompletion(currentText);
 
     if (completedText) {
-        const isCommandCompletion = commandList.includes(completedText) && !currentText.includes(' ');
-        let newText = completedText;
-        if (isCommandCompletion) {
-            newText += ' ';
+      const isCommandCompletion = commandList.includes(completedText) && !currentText.includes(' ');
+      let newText = completedText;
+      if (isCommandCompletion) newText += ' ';
+      inputElement.textContent = newText;
+      moveCursorToEnd(inputElement);
+    } else if (currentText) {
+      const [command, arg] = currentText.split(/\s+/);
+      if (command === 'cat' && arg) {
+        const fileMatches = postList.filter(filename => filename.startsWith(arg)); 
+        if (fileMatches.length > 1) {
+          inputElement.outerHTML = `<span>${currentText}</span>`;
+          print();
+          print(fileMatches.join('  '));
+          print();
+          prompt(); 
+          return true;
         }
-        inputElement.textContent = newText;
-        moveCursorToEnd(inputElement); // <-- UPDATED: Use helper
-    } 
-    
-    else if (currentText) {
-        const [command, arg] = currentText.split(/\s+/);
-        if (command === 'cat' && arg) {
-            const fileMatches = postList.filter(filename => filename.startsWith(arg)); 
-            if (fileMatches.length > 1) {
-                inputElement.outerHTML = `<span>${currentText}</span>`;
-                print();
-                print(fileMatches.join('  '));
-                print();
-                prompt(); 
-                return true;
-            }
-        }
-        const commandMatches = commandList.filter(cmd => cmd.startsWith(currentText));
-        if (commandMatches.length > 1) {
-            inputElement.outerHTML = `<span>${currentText}</span>`;
-            print();
-            print(commandMatches.join('  '));
-            print();
-            prompt(); 
-            return true;
-        }
+      }
+      const commandMatches = commandList.filter(cmd => cmd.startsWith(currentText));
+      if (commandMatches.length > 1) {
+        inputElement.outerHTML = `<span>${currentText}</span>`;
+        print();
+        print(commandMatches.join('  '));
+        print();
+        prompt(); 
+        return true;
+      }
     }
-    
     return true; 
-}
+  }
 
-function updateShadowHint(inputElement) {
+  function updateShadowHint(inputElement) {
     const currentText = inputElement.textContent.trim();
     const completedText = findCompletion(currentText);
-
     let hintHTML = '';
     if (completedText && completedText.length > currentText.length) {
-        let finalCompletion = completedText;
-        if (commandList.includes(completedText) && !currentText.includes(' ')) {
-             finalCompletion += ' ';
-        }
-        const padding = currentText.padEnd(finalCompletion.length, '');
-        const hintText = finalCompletion.substring(currentText.length);
-        hintHTML = `<span style="opacity:0;">${padding}</span>${hintText}`;
+      let finalCompletion = completedText;
+      if (commandList.includes(completedText) && !currentText.includes(' ')) {
+        finalCompletion += ' ';
+      }
+      const padding = currentText.padEnd(finalCompletion.length, '');
+      const hintText = finalCompletion.substring(currentText.length);
+      hintHTML = `<span style="opacity:0;">${padding}</span>${hintText}`;
     }
-    
     let shadowHint = inputElement.previousElementSibling;
     if (shadowHint && shadowHint.id === 'shadow-hint') {
-        shadowHint.innerHTML = hintHTML;
+      shadowHint.innerHTML = hintHTML;
     }
-}
+  }
 
+  function updatePromptListeners() {
+    const input = term.querySelector('.input-line:last-child');
+    const shadowHint = document.createElement('span');
+    shadowHint.id = 'shadow-hint';
+    input.parentNode.insertBefore(shadowHint, input);
 
-function updatePromptListeners() {
-  const input = term.querySelector('.input-line:last-child');
-  
-  const shadowHint = document.createElement('span');
-  shadowHint.id = 'shadow-hint';
-  input.parentNode.insertBefore(shadowHint, input);
-
-  input.addEventListener('input', () => {
+    input.addEventListener('input', () => {
       updateShadowHint(input);
-      // If user types, reset history position
       histPos = history.length;
-  });
-  
-  // <-- UPDATED: Keydown listener with smooth history
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const cmd = input.textContent.trim();
-      if (cmd) { // Only save non-empty commands
-        history.push(cmd);
-      }
-      histPos = history.length; // Reset position
-      currentInput = ''; // Clear stored input
-      run(cmd);
-      
-    } else if (e.key === 'Tab') {
-        e.preventDefault();
-        if (handleTab(input)) {
-            updateShadowHint(input);
-        }
-        
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (histPos === history.length) {
-        // Save the current line buffer
-        currentInput = input.textContent;
-      }
-      if (histPos > 0) {
-        histPos--;
-        input.textContent = history[histPos];
-        moveCursorToEnd(input);
-      }
-      
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (histPos < history.length - 1) {
-        histPos++;
-        input.textContent = history[histPos];
-        moveCursorToEnd(input);
-      } else if (histPos === history.length - 1) {
-        // Restore the saved line buffer
-        histPos++;
-        input.textContent = currentInput;
-        moveCursorToEnd(input);
-      }
-    }
+    });
     
-    setTimeout(() => updateShadowHint(input), 0);
-  });
-}
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const cmd = input.textContent.trim();
+        if (cmd) history.push(cmd);
+        histPos = history.length;
+        currentInput = '';
+        run(cmd);
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        if (handleTab(input)) updateShadowHint(input);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (histPos === history.length) currentInput = input.textContent;
+        if (histPos > 0) {
+          histPos--;
+          input.textContent = history[histPos];
+          moveCursorToEnd(input);
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (histPos < history.length - 1) {
+          histPos++;
+          input.textContent = history[histPos];
+          moveCursorToEnd(input);
+        } else if (histPos === history.length - 1) {
+          histPos++;
+          input.textContent = currentInput;
+          moveCursorToEnd(input);
+        }
+      }
+      setTimeout(() => updateShadowHint(input), 0);
+    });
+  }
 
+  function prompt() {
+    term.innerHTML += `<span class="prompt">user@post:~$ </span><span class="input-line" contenteditable="true" spellcheck="false" autofocus></span>`;
+    updatePromptListeners();
+    focusLastInput();
+  }
 
-function prompt() {
-  term.innerHTML += `<span class="prompt">user@post:~$ </span><span class="input-line" contenteditable="true" autofocus></span>`;
-  updatePromptListeners();
-  focusLastInput();
-}
-
-// MODIFIED: Added 'grep' command description
-const staticCommands = {
-  help: `Available commands:
+  const staticCommands = {
+    help: `Available commands:
   help      - show this help
   ls        - list available posts (from POSTLIST.txt)
   cat [file] - display a post file (e.g., 'cat post1')
   grep [pattern] - searches post names for a pattern (e.g., 'grep post')
   exit      - return to the blog index
   clear     - clear the terminal`
-};
+  };
 
-function run(cmd) {
-  const inputLine = term.querySelector('.input-line:last-child');
-  inputLine.outerHTML = `<span>${cmd}</span>`;
-  
-  const [command, arg] = cmd.split(/\s+/);
-  let shouldPrompt = true;
+  function run(cmd) {
+    const inputLine = term.querySelector('.input-line:last-child');
+    inputLine.outerHTML = `<span>${cmd}</span>`;
+    const [command, arg] = cmd.split(/\s+/);
+    let shouldPrompt = true;
 
-  if (command === 'clear') {
-    term.innerHTML = '';
-    print('Type \'ls\' to see available posts, or \'help\' for commands.');
-  } else if (command === 'exit') {
-    window.location.href = '../blog.html';
-    return;
-  } else if (command === 'ls') {
-    if (postList.length === 0) {
-      print('\nls: Error: Manifest not loaded. Check POSTLIST.txt location and server status.');
-    } 
-      
-    const fileList = postList.map(p => `<span class="file-name">${p}</span>`).join('\n');
-    print(`\nTotal posts: ${postList.length}\n${fileList}`);
-
-  } else if (command === 'cat') {
-    if (postList.includes(arg)) {
-      catFile(`${arg}.md`); 
-      shouldPrompt = false; 
-    } else if (arg) {
-      print(`\ncat: ${arg}: No such file or post. Available: ${postList.join(', ')}`);
-    } else {
-      print('\ncat: usage: cat [post-name]');
-    }
-  } else if (command === 'grep') { // Handle grep, even if it's only against the manifest
-    const pattern = cmd.substring(command.length).trim();
-    if (!pattern) {
+    if (command === 'clear') {
+      term.innerHTML = '';
+      print('Type \'ls\' to see available posts, or \'help\' for commands.');
+    } else if (command === 'exit') {
+      window.location.href = '../blog.html';
+      return;
+    } else if (command === 'ls') {
+      if (postList.length === 0) {
+        print('\nls: Error: Manifest not loaded. Check POSTLIST.txt location and server status.');
+      } 
+      const fileList = postList.map(p => `<span class="file-name">${p}</span>`).join('\n');
+      print(`\nTotal posts: ${postList.length}\n${fileList}`);
+    } else if (command === 'cat') {
+      if (postList.includes(arg)) {
+        catFile(`${arg}.md`); 
+        shouldPrompt = false; 
+      } else if (arg) {
+        print(`\ncat: ${arg}: No such file or post. Available: ${postList.join(', ')}`);
+      } else {
+        print('\ncat: usage: cat [post-name]');
+      }
+    } else if (command === 'grep') {
+      const pattern = cmd.substring(command.length).trim();
+      if (!pattern) {
         print('\ngrep: usage: grep [pattern]');
-    } else {
+      } else {
         const matches = postList.filter(name => name.toLowerCase().includes(pattern.toLowerCase()));
         if (matches.length > 0) {
-            const fileList = matches.map(p => `<span class="file-name">${p}</span>`).join('\n');
-            print(`\nMatches found: ${matches.length}\n${fileList}`);
+          const fileList = matches.map(p => `<span class="file-name">${p}</span>`).join('\n');
+          print(`\nMatches found: ${matches.length}\n${fileList}`);
         } else {
-            print(`\nNo matches found for pattern: ${pattern}`);
+          print(`\nNo matches found for pattern: ${pattern}`);
         }
+      }
+    } else if (staticCommands[cmd]) {
+      print('\n' + staticCommands[cmd]);
+    } else if (cmd !== '') {
+      print(`\nCommand not found: ${cmd}`);
     }
-  } else if (staticCommands[cmd]) {
-    print('\n' + staticCommands[cmd]);
-  } else if (cmd !== '') {
-    print(`\nCommand not found: ${cmd}`);
-  }
-  
-  if (shouldPrompt) {
+    if (shouldPrompt) {
       print('\n');
       prompt();
+    }
   }
-}
 
-async function initPost() {
+  async function initPost() {
     term.innerHTML = '';
-
     try {
-        const url = `POSTLIST.txt`; 
-        const response = await fetch(url, { cache: "no-store" }); 
-        if (response.ok) {
-            const text = await response.text();
-            postList = text.split('\n')
-                           .filter(line => line.trim() !== '')
-                           .map(line => line.replace(/\.md$/i, ''));
-        }
+      const url = `POSTLIST.txt`; 
+      const response = await fetch(url, { cache: "no-store" }); 
+      if (response.ok) {
+        const text = await response.text();
+        postList = text.split('\n')
+                       .filter(line => line.trim() !== '')
+                       .map(line => line.replace(/\.md$/i, ''));
+      }
     } catch (error) {
-        console.error("Could not load post manifest for cat command:", error);
+      console.error("Could not load post manifest:", error);
     }
-    
     catFile('post.md');
-}
+  }
 
-document.addEventListener('click', (e) => {
-    // 1. Check if the user is actively making a text selection.
-    // If the selection object has any range (i.e., text is being selected), don't steal focus.
+  document.addEventListener('click', e => {
     const selection = window.getSelection();
-    if (selection && selection.type === 'Range') {
-        return; // Exit and allow the selection to happen
-    }
-
-    // 2. If no text is selected, proceed with focusing the input.
+    if (selection && selection.type === 'Range') return;
     if (!e.target.classList.contains('input-line') && e.target.closest('#terminal')) {
-        focusLastInput();
+      focusLastInput();
     }
-});
+  });
 
-initPost();
-</script>
+  initPost();
+  </script>
+
+  <!-- Mermaid.js loader -->
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    window.mermaid = mermaid;
+    mermaid.initialize({ startOnLoad: false });
+  </script>
 </body>
 </html>

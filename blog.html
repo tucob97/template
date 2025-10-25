@@ -240,7 +240,7 @@ function updatePromptListeners() {
 }
 
 function prompt() {
-  term.innerHTML += `<span class="prompt">user@blog:~$ </span><span class="input-line" contenteditable="true" autofocus></span>`;
+  term.innerHTML += `<span class="prompt">user@blog:~$ </span><span class="input-line" contenteditable="true" spellcheck="false" autofocus></span>`;
   updatePromptListeners();
   focusLastInput();
 }

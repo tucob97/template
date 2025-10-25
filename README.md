@@ -9,6 +9,7 @@ This repository provides a terminal-style personal website and blog template wit
 
 * **Terminal Aesthetic:** A classic command-line interface.
 * **Zero-Friction Blogging:** Publish new content simply by writing a **Markdown** file.
+* **Graph drawing support:** Using **mermaid** inside markdown for drawing graph. 
 * **Automated Content Management:** A GitHub Workflow for handling blog posts.
 * **Fast & Light:** With no heavy assets or graphics.
 

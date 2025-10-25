@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>~ my blog: /blogpost ~</title>
+
+<style>
+  body {
+    background-color: #3e3b3b;
+    color: rgb(136,185,136);
+    font-family: monospace;
+    margin: 0;
+    padding: 10px;
+  }
+  #terminal {
+    white-space: pre-wrap;
+    outline: none;
+    min-height: 100vh;
+  }
+  .prompt {
+    color: #0ff; 
+  }
+  .input-line {
+    display: inline;
+    position: relative; 
+    min-width: 1ch; 
+    outline: none;
+  }
+  .file-name {
+    color: #fff;
+  }
+  
+  #shadow-hint {
+    position: absolute;
+    color: #c1c194; 
+    pointer-events: none;
+    white-space: pre;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>
+<div id="terminal" tabindex="0"></div>
+<script>
+const term = document.getElementById('terminal');
+
+let history = [];
+let histPos = 0;
+let currentInput = ''; 
+
+let postManifest = []; 
+
+// MODIFIED: Added 'grep' to the commandList
+const commandList = ['help', 'ls', 'goto', 'exit', 'clear', 'latest', 'grep'];
+
+function print(text='') {
+  term.innerHTML += text + '\n';
+}
+
+function focusLastInput() {
+  const input = term.querySelector('.input-line:last-child');
+  if (input) {
+    input.focus();
+    term.scrollTop = term.scrollHeight;
+  }
+}
+
+// <-- NEW: Helper function to move cursor to the end
+function moveCursorToEnd(el) {
+    if (!el) return;
+    const node = el.childNodes[0] || el;
+    const len = node.textContent.length;
+    
+    const range = document.createRange();
+    const sel = window.getSelection();
+    range.setStart(node, len);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+}
+
+function findCompletion(input) {
+    if (!input) return null;
+    const parts = input.trim().split(/\s+/);
+    const command = parts[0];
+    const arg = parts.length > 1 ? parts.slice(1).join(' ') : null;
+
+    if (parts.length === 1 && !input.endsWith(' ')) {
+        const matches = commandList.filter(cmd => cmd.startsWith(command));
+        return matches.length === 1 ? matches[0] : null;
+    }
+    
+    if (command === 'goto' && arg) {
+        const matches = postManifest.filter(filename => 
+            filename.startsWith(arg)
+        );
+
+        if (matches.length === 1) {
+            return 'goto ' + matches[0];
+        } else if (matches.length > 1) {
+             let prefix = arg;
+             let finished = false;
+             while (!finished) {
+                 const currentChar = matches[0][prefix.length];
+                 if (currentChar && matches.every(match => match.startsWith(prefix + currentChar))) {
+                     prefix += currentChar;
+                 } else {
+                     finished = true;
+                 }
+             }
+             return prefix.length > arg.length ? 'goto ' + prefix : null;
+        }
+    }
+    return null;
+}
+
+function handleTab(inputElement) {
+    const currentText = inputElement.textContent.trim();
+    const completedText = findCompletion(currentText);
+
+    if (completedText) {
+        const isCommandCompletion = commandList.includes(completedText) && !currentText.includes(' ');
+        let newText = completedText;
+        if (isCommandCompletion) {
+            newText += ' ';
+        }
+        inputElement.textContent = newText;
+        moveCursorToEnd(inputElement); // <-- UPDATED: Use helper
+    } 
+    
+    else if (currentText) {
+        const commandMatches = commandList.filter(cmd => cmd.startsWith(currentText));
+        if (commandMatches.length > 1) {
+            inputElement.outerHTML = `<span>${currentText}</span>`;
+            print();
+            print(commandMatches.join('  '));
+            print();
+            prompt(); 
+            return true;
+        }
+
+        const [command, arg] = currentText.split(/\s+/);
+        if (command === 'goto' && arg) {
+            const fileMatches = postManifest.filter(filename => filename.startsWith(arg));
+            if (fileMatches.length > 1) {
+                inputElement.outerHTML = `<span>${currentText}</span>`;
+                print();
+                print(fileMatches.join('  '));
+                print();
+                prompt(); 
+                return true;
+            }
+        }
+    }
+    
+    return true; 
+}
+
+function updateShadowHint(inputElement) {
+    const currentText = inputElement.textContent.trim();
+    const completedText = findCompletion(currentText);
+
+    let hintHTML = '';
+    if (completedText && completedText.length > currentText.length) {
+        let finalCompletion = completedText;
+        if (commandList.includes(completedText) && !currentText.includes(' ')) {
+             finalCompletion += ' ';
+        }
+        const padding = currentText.padEnd(finalCompletion.length, '');
+        const hintText = finalCompletion.substring(currentText.length);
+        hintHTML = `<span style="opacity:0;">${padding}</span>${hintText}`;
+    }
+    
+    let shadowHint = inputElement.previousElementSibling;
+    if (shadowHint && shadowHint.id === 'shadow-hint') {
+        shadowHint.innerHTML = hintHTML;
+    }
+}
+
+
+function updatePromptListeners() {
+  const input = term.querySelector('.input-line:last-child');
+  
+  const shadowHint = document.createElement('span');
+  shadowHint.id = 'shadow-hint';
+  input.parentNode.insertBefore(shadowHint, input);
+
+  input.addEventListener('input', () => {
+      updateShadowHint(input);
+      // If user types, reset history position
+      histPos = history.length;
+  });
+  
+  // <-- UPDATED: Keydown listener with smooth history
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const cmd = input.textContent.trim();
+      if (cmd) { // Only save non-empty commands
+        history.push(cmd);
+      }
+      histPos = history.length; // Reset position
+      currentInput = ''; // Clear stored input
+      run(cmd);
+      
+    } else if (e.key === 'Tab') {
+        e.preventDefault();
+        if (handleTab(input)) {
+            updateShadowHint(input);
+        }
+        
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (histPos === history.length) {
+        // Save the current line buffer
+        currentInput = input.textContent;
+      }
+      if (histPos > 0) {
+        histPos--;
+        input.textContent = history[histPos];
+        moveCursorToEnd(input);
+      }
+      
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (histPos < history.length - 1) {
+        histPos++;
+        input.textContent = history[histPos];
+        moveCursorToEnd(input);
+      } else if (histPos === history.length - 1) {
+        // Restore the saved line buffer
+        histPos++;
+        input.textContent = currentInput;
+        moveCursorToEnd(input);
+      }
+    }
+    
+    setTimeout(() => updateShadowHint(input), 0);
+  });
+}
+
+function prompt() {
+  term.innerHTML += `<span class="prompt">user@blog:~$ </span><span class="input-line" contenteditable="true" autofocus></span>`;
+  updatePromptListeners();
+  focusLastInput();
+}
+
+// MODIFIED: Added 'grep' command description
+const staticCommands = {
+  help: `Available commands:
+  help      - show this help
+  goto [file] - displays the content of a post by redirecting to its static page (e.g., 'goto post')
+  grep [pattern] - searches post names for a pattern (e.g., 'grep post')
+  ls        - list all available blog posts
+  latest    - go to the most recent post (last entry in POSTLIST.txt)
+  exit      - return to the main site terminal
+  clear     - clear the terminal`
+};
+
+// NEW FUNCTION: Implements the grep logic for post names
+function grepPostNames(pattern) {
+    if (postManifest.length === 0) {
+        print('\ngrep: Error: Post manifest not loaded.');
+        return;
+    }
+    if (!pattern) {
+        print('\ngrep: usage: grep [pattern]');
+        return;
+    }
+
+    const patternLower = pattern.toLowerCase();
+    
+    // Filter postManifest for names containing the pattern
+    const matches = postManifest.filter(name => 
+        name.toLowerCase().includes(patternLower)
+    );
+
+    if (matches.length > 0) {
+        const fileList = matches.map(p => `<span class="file-name">${p}</span>`).join('\n');
+        print(`\nMatches found: ${matches.length}\n${fileList}`);
+    } else {
+        print(`\nNo matches found for pattern: ${pattern}`);
+    }
+}
+
+// MODIFIED: run function to handle the 'grep' command and improve argument parsing
+function run(cmd) {
+  const inputLine = term.querySelector('.input-line:last-child');
+  inputLine.outerHTML = `<span>${cmd}</span>`;
+  
+  const [command, ...args] = cmd.split(/\s+/); // Use rest operator to capture all arguments
+  const arg = args.join(' '); // Combine arguments back into a single search string
+
+  if (command === 'clear') {
+    term.innerHTML = '';
+    print('Type \'help\' for commands.');
+  } else if (command === 'exit') {
+    window.location.href = 'index.html';
+    return;
+  } else if (command === 'ls') {
+    if (postManifest.length === 0) {
+      print('\nls: Error: Manifest not loaded. Check POSTLIST.txt location and server status.');
+      print('\n');
+      prompt();
+      return;
+    }
+    const fileList = postManifest.map(p => `<span class="file-name">${p}</span>`).join('\n');
+    print(`\nTotal posts: ${postManifest.length}\n${fileList}`);
+  } else if (command === 'goto') {
+    if (postManifest.includes(arg)) {
+      window.location.href = `blogpost/${arg}.html`;
+      return; 
+    } else if (arg) {
+      print(`\ngoto: ${arg}: No such file or post.`);
+    } else {
+      print('\ngoto: usage: goto [post-name] (e.g., goto post)');
+    }
+  } else if (command === 'latest') {
+    if (postManifest.length > 0) {
+        const latestPost = postManifest[postManifest.length - 1];
+        print(`\nRedirecting to latest post: ${latestPost}`);
+        window.location.href = `blogpost/${latestPost}.html`;
+        return;
+    } else {
+        print('\nlatest: Error: Post manifest not loaded or empty.');
+    }
+  } else if (command === 'grep') { // NEW COMMAND HANDLER
+    grepPostNames(arg); 
+  } else if (staticCommands[cmd]) {
+    print('\n' + staticCommands[cmd]);
+  } else if (cmd !== '') {
+    print(`\nCommand not found: ${cmd}`);
+  }
+  
+  print('\n');
+  prompt();
+}
+
+async function initBlog() {
+  const tucob = `
+
+#                                                     
+#     m    m               mmmmm  ""#                 
+#     ##  ## m   m         #    #   #     mmm    mmmm 
+#     # ## # "m m"         #mmmm"   #    #" "#  #" "# 
+#     # "" #  #m#          #    #   #    #   #  #   # 
+#     #    #  "#           #mmmm"   "mm  "#m#"  "#m"# 
+#             m"                                 m  # 
+#            ""                                   ""  
+
+`;
+  print(tucob);
+  print('Welcome to the Blog Terminal');
+  print('');
+  print('Type "ls" to list all my blog posts');
+  print('');
+  print('Type "latest" to see my latest post');
+  print('');
+  try {
+    const url = `blogpost/POSTLIST.txt`; 
+    const response = await fetch(url, { cache: "no-store" }); 
+ 
+    if (!response.ok) {
+        throw new Error('Manifest fetch failed.');
+    }
+    const text = await response.text();
+    
+    postManifest = text.split('\n').filter(line => line.trim() !== '');
+
+    //print(`[Post list loaded. ${postManifest.length} files found.]`);
+    print('Type "help" for a list of commands.\n');
+  } catch (error) {
+    print('<span style="color: #f00;">INIT ERROR: Could not load post list. (Is POSTLIST.txt correctly placed in /blogpost?)</span>');
+    print('<span style="color: #f00;">**Please start a local web server (e.g., python -m http.server).**</span>');
+    print('\n');
+  }
+  
+  prompt();
+}
+
+document.addEventListener('click', (e) => {
+    // 1. Check if the user is actively making a text selection.
+    // If the selection object has any range (i.e., text is being selected), don't steal focus.
+    const selection = window.getSelection();
+    if (selection && selection.type === 'Range') {
+        return; // Exit and allow the selection to happen
+    }
+
+    // 2. If no text is selected, proceed with focusing the input.
+    if (!e.target.classList.contains('input-line') && e.target.closest('#terminal')) {
+        focusLastInput();
+    }
+});
+
+initBlog();
+</script>
+</body>
+</html>

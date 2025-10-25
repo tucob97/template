@@ -1,0 +1,119 @@
+name: Auto-generate blogpost HTML files
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "blogpost/*.md"
+
+permissions:
+  contents: write
+  
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Generate HTML from markdown template
+        id: generate
+        run: |
+          set -e  # stop the workflow if any command fails
+          python3 <<'PYCODE'
+          import os, re, shutil, sys
+
+          BASE_DIR = "blogpost"
+          TEMPLATE = os.path.join(BASE_DIR, "template.html")
+          POSTLIST = os.path.join(BASE_DIR, "POSTLIST.txt")
+
+          print("=== Blogpost Generator ===")
+          print(f"Base directory: {BASE_DIR}")
+          print(f"Template file:  {TEMPLATE}")
+          print("--------------------------")
+
+          # Verify template exists
+          if not os.path.exists(TEMPLATE):
+              print("❌ ERROR: template.html not found.")
+              sys.exit(1)
+
+          # Load existing posts list (if exists)
+          existing_posts = []
+          if os.path.exists(POSTLIST):
+              with open(POSTLIST, "r") as f:
+                  existing_posts = [line.strip() for line in f if line.strip()]
+          else:
+              print("⚠️  POSTLIST.txt not found — it will be created.")
+
+          new_posts = []
+          for fname in os.listdir(BASE_DIR):
+              if not fname.endswith(".md") or fname == "template.md":
+                  continue
+
+              post_name = os.path.splitext(fname)[0]
+              md_path = os.path.join(BASE_DIR, fname)
+              html_path = os.path.join(BASE_DIR, f"{post_name}.html")
+
+              print(f"📄 Processing: {fname}")
+
+              try:
+                  with open(TEMPLATE, "r") as f:
+                      html = f.read()
+
+                  html = html.replace("catFile('post.md')", f"catFile('{fname}')")
+                  html = html.replace("[POST_TITLE]", post_name)
+                  html = html.replace("[POST_SLUG]", post_name)
+                  html = html.replace(
+                      "[POST_DESCRIPTION - A short snippet of the post content]",
+                      f"{post_name} blog post"
+                  )
+
+                  with open(html_path, "w") as f:
+                      f.write(html)
+
+                  print(f"✅ Generated: {html_path}")
+
+                  if post_name not in existing_posts:
+                      existing_posts.append(post_name)
+                      new_posts.append(post_name)
+
+              except Exception as e:
+                  print(f"❌ Failed to generate {fname}: {e}")
+                  sys.exit(1)
+
+          with open(POSTLIST, "w") as f:
+              f.write("\n".join(sorted(existing_posts)) + "\n")
+
+          print("--------------------------")
+          print(f"📚 Updated POSTLIST.txt ({len(existing_posts)} total posts)")
+          if new_posts:
+              print(f"🆕 New posts added: {', '.join(new_posts)}")
+          else:
+              print("ℹ️ No new posts added.")
+          print("=== Generation complete ===")
+          PYCODE
+
+      - name: Commit and push results
+        if: success()  # run only if the previous step succeeded
+        run: |
+          echo "Committing generated HTML files..."
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          # Show status before committing
+          git status --short
+
+          git add blogpost/*.html blogpost/POSTLIST.txt || true
+          if git diff --cached --quiet; then
+            echo "✅ No changes to commit."
+          else
+            git commit -m "Auto-generate new post HTML files"
+            git push
+            echo "🚀 Changes pushed successfully."
+          fi

@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>~ my terminal site ~</title>
+<style>
+  body {
+    background-color: #3e3b3b;
+    color: rgb(136,185,136);
+    font-family: monospace;
+    margin: 0;
+    padding: 10px
+  }
+  #terminal {
+    white-space: pre-wrap;
+    outline: none;
+    min-height: 100vh; 
+  }
+  .prompt {
+    color: #0ff;
+  }
+  .input-line {
+    display: inline;
+    position: relative; /* Add for shadow-hint positioning */
+    min-width: 1ch; /* Ensure input area is visible */
+    outline: none;
+  }
+  #shadow-hint {
+    position: absolute;
+    color: #c1c194; 
+    pointer-events: none;
+    white-space: pre;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>
+<div id="terminal" tabindex="0"></div>
+<script>
+const term = document.getElementById('terminal');
+
+let history = [];
+let histPos = 0;
+let currentInput = ''; // <-- NEW: Store current typing
+
+const commands = {
+  help: `
+Available commands:
+  help      - show this help
+  about     - info about me
+  projects  - what I build
+  contact   - how to reach me
+  blog      - read my latest posts (use 'blog')
+  clear     - clear the terminal`,
+  
+  about: `
+###
+My info ...
+.`,
+
+  projects: `
+  Some of my projects:
+  - My project -> my project description
+  - my 2 project -> my 2 project description
+  ...
+  `,
+
+  contact: `
+  Contact me:
+  
+  Email:    emy email
+  LinkedIn: my linkedin
+  GitHub:   mygithub
+  `,
+
+  blog: `Type 'blog' to access my blog posts.`,
+
+  clear: ''
+};
+
+const commandList = Object.keys(commands).filter(c => c !== 'clear').concat(['blog', 'clear', 'exit']);
+
+function print(text='') {
+  term.innerHTML += text + '\n';
+}
+
+function focusLastInput() {
+  const input = term.querySelector('.input-line:last-child');
+  if (input) {
+    input.focus();
+    term.scrollTop = term.scrollHeight;
+  }
+}
+
+// <-- NEW: Helper function to move cursor to the end
+function moveCursorToEnd(el) {
+    if (!el) return;
+    // Check if el.childNodes[0] exists, otherwise use el
+    const node = el.childNodes[0] || el;
+    const len = node.textContent.length;
+    
+    const range = document.createRange();
+    const sel = window.getSelection();
+    range.setStart(node, len);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+}
+
+function findCompletion(input) {
+    if (!input) return null;
+
+    const matches = commandList.filter(cmd => 
+        cmd.startsWith(input)
+    );
+
+    if (matches.length === 1) {
+        return matches[0];
+    } else if (matches.length > 1) {
+         let prefix = input;
+         let finished = false;
+         while (!finished) {
+             const currentChar = matches[0][prefix.length];
+             if (currentChar && matches.every(match => match.startsWith(prefix + currentChar))) {
+                 prefix += currentChar;
+             } else {
+                 finished = true;
+             }
+         }
+         return prefix.length > input.length ? prefix : null;
+    }
+    return null;
+}
+
+function handleTab(inputElement) {
+    const currentText = inputElement.textContent.trim();
+    const completedText = findCompletion(currentText);
+
+    if (completedText) {
+        inputElement.textContent = completedText;
+        moveCursorToEnd(inputElement); // <-- UPDATED: Use helper
+    } else if (currentText) {
+        const matches = commandList.filter(cmd => 
+            cmd.startsWith(currentText)
+        );
+        if (matches.length > 1) {
+            inputElement.outerHTML = `<span>${currentText}</span>`;
+            print();
+            print(matches.join('  '));
+            print();
+            prompt(); 
+            return true;
+        }
+    }
+    return true; 
+}
+
+function updateShadowHint(inputElement) {
+    const currentText = inputElement.textContent.trim();
+    const completedText = findCompletion(currentText);
+
+    let hintHTML = '';
+
+    if (completedText && completedText.length > currentText.length) {
+        const padding = currentText.padEnd(completedText.length, '\u00A0').slice(0, currentText.length);
+        const hintText = completedText.substring(currentText.length);
+        hintHTML = `<span style="opacity:0;">${padding}</span>${hintText}`;
+    }
+    
+    let shadowHint = inputElement.previousElementSibling;
+    if (shadowHint && shadowHint.id === 'shadow-hint') {
+        shadowHint.innerHTML = hintHTML;
+    }
+}
+
+function updatePromptListeners() {
+  const input = term.querySelector('.input-line:last-child');
+  
+  const shadowHint = document.createElement('span');
+  shadowHint.id = 'shadow-hint';
+  input.parentNode.insertBefore(shadowHint, input);
+
+  input.addEventListener('input', () => {
+      updateShadowHint(input);
+      // If user types, reset history position
+      histPos = history.length;
+  });
+  
+  // <-- UPDATED: Keydown listener with smooth history
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const cmd = input.textContent.trim();
+      if (cmd) { // Only save non-empty commands
+        history.push(cmd);
+      }
+      histPos = history.length; // Reset position
+      currentInput = ''; // Clear stored input
+      run(cmd);
+      
+    } else if (e.key === 'Tab') {
+        e.preventDefault();
+        if (handleTab(input)) {
+            updateShadowHint(input); 
+        }
+        
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (histPos === history.length) {
+        // Save the current line buffer
+        currentInput = input.textContent;
+      }
+      if (histPos > 0) {
+        histPos--;
+        input.textContent = history[histPos];
+        moveCursorToEnd(input);
+      }
+      
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (histPos < history.length - 1) {
+        histPos++;
+        input.textContent = history[histPos];
+        moveCursorToEnd(input);
+      } else if (histPos === history.length - 1) {
+        // Restore the saved line buffer
+        histPos++;
+        input.textContent = currentInput;
+        moveCursorToEnd(input);
+      }
+    }
+    
+    setTimeout(() => updateShadowHint(input), 0);
+  });
+}
+
+function prompt() {
+  term.innerHTML += `<span class="prompt">user@homepage:~$ </span><span class="input-line" contenteditable="true" autofocus></span>`;
+  updatePromptListeners(); 
+  focusLastInput();
+}
+
+function run(cmd) {
+  const inputLine = term.querySelector('.input-line:last-child');
+  inputLine.outerHTML = `<span>${cmd}</span>`;
+  
+  if (cmd === 'blog') {
+    window.location.href = 'blog.html';
+    return;
+  } 
+  
+  else if (cmd === 'clear') {
+    term.innerHTML = '';
+    print('Type \'help\' for commands.');
+  } else if (commands[cmd]) {
+    print(commands[cmd]);
+  } else if (cmd !== '') {
+    print(`\nCommand not found: ${cmd}`);
+  }
+  
+  print('\n'); 
+  prompt();
+}
+
+document.addEventListener('click', (e) => {
+    // 1. Check if the user is actively making a text selection.
+    // If the selection object has any range (i.e., text is being selected), don't steal focus.
+    const selection = window.getSelection();
+    if (selection && selection.type === 'Range') {
+        return; // Exit and allow the selection to happen
+    }
+
+    // 2. If no text is selected, proceed with focusing the input.
+    if (!e.target.classList.contains('input-line') && e.target.closest('#terminal')) {
+        focusLastInput();
+    }
+});
+
+const header = `
+==========================================
+ Welcome to my terminal website!
+==========================================
+
+Some info about me ...
+
+Type "blog" for my blog posts
+Type "help" to see all available commands.
+`;
+
+
+print(header)
+prompt();
+</script>
+</body>
+</html>

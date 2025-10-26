@@ -1,6 +1,5 @@
 ## A Terminal-Style Minimalist Website & Blog
 
-Welcome to `template`, a project designed for those who appreciate the simplicity of the command line. 
 This repository provides a terminal-style personal website and blog template with **zero graphical overhead** and a focus on straightforward content creation.
 
 ![Demo Animation](https://github.com/tucob97/asset/blob/main/template_repo/demowebsite.gif)
